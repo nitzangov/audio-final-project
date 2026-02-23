@@ -1,0 +1,39 @@
+data:
+  subset: small          # small | medium
+  raw_dir: data/fma_small
+  metadata_dir: data/fma_metadata
+  cache_dir: data/cache
+  sample_rate: 22050
+  duration_sec: 30
+  splits_csv: configs/splits/small_split.csv
+
+features:
+  mel:
+    n_mels: 128
+    n_fft: 2048
+    hop_length: 512
+  cqt:
+    n_bins: 84
+    hop_length: 512
+
+model:
+  phase: 1               # 1=mel-only, 2=dual-stream, 3=+attention
+  num_classes: 8          # 8 for small, 16 for medium
+  backbone_channels: [32, 64, 128]
+  norm_type: group        # GroupNorm (stable at small batch sizes)
+  num_groups: 8
+  dropout: 0.3
+  classifier_hidden: 64
+
+training:
+  batch_size: 16
+  lr: 0.001
+  weight_decay: 0.0001
+  epochs: 50
+  early_stop_patience: 10
+  scheduler_patience: 5
+  scheduler_factor: 0.5
+  num_seeds: 3
+
+seed: 42
+checkpoint_dir: checkpoints
