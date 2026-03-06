@@ -22,6 +22,10 @@ def main():
         help="Path to config YAML",
     )
     parser.add_argument("--seed", type=int, default=None, help="Override seed")
+    parser.add_argument(
+        "--resume", type=str, default=None,
+        help="Path to checkpoint to resume from (default: None)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -43,6 +47,10 @@ def main():
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model: phase={config.model.phase}, params={n_params:,}")
 
+    resume_path = args.resume
+    if resume_path:
+        print(f"Resuming from: {resume_path}")
+
     history = train(
         model=model,
         train_loader=train_loader,
@@ -50,6 +58,7 @@ def main():
         config=config,
         checkpoint_dir=checkpoint_dir,
         label_names=label_names,
+        resume_checkpoint=resume_path,
     )
 
     print(f"\nTraining complete.")

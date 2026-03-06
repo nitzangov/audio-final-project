@@ -1,0 +1,18 @@
+# Data (raw audio, zips, cached waveforms/spectrograms)
+data/
+
+# Virtual environment
+.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Pytest
+.pytest_cache/
+
+# Generated training/eval artifacts (keep best_model.pt and run_metadata.json)
+checkpoints/training_history.json
+checkpoints/benchmark_results.json
+checkpoints/test_results.json
+checkpoints/confusion_matrix.png

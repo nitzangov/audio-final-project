@@ -131,8 +131,13 @@ def train(
     config,
     checkpoint_dir: str | Path = "checkpoints",
     label_names: list[str] | None = None,
+    resume_checkpoint: str | Path | None = None,
 ) -> dict:
     """Full training loop with early stopping and checkpointing.
+
+    Args:
+        resume_checkpoint: path to a checkpoint to resume from. Restores model
+            weights, optimizer state, and starting epoch.
 
     Returns a dict of training history and best metrics.
     """
@@ -165,11 +170,24 @@ def train(
     }
     best_val_acc = 0.0
     best_epoch = 0
+    start_epoch = 1
+
+    if resume_checkpoint is not None:
+        ckpt = torch.load(resume_checkpoint, map_location="cpu", weights_only=False)
+        model.load_state_dict(ckpt["model_state_dict"])
+        optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        start_epoch = ckpt["epoch"] + 1
+        best_val_acc = ckpt.get("val_accuracy", 0.0)
+        best_epoch = ckpt["epoch"]
+        logger.info(
+            "Resumed from checkpoint: epoch %d, val_acc=%.4f",
+            ckpt["epoch"], best_val_acc,
+        )
 
     logger.info("Starting training: %d epochs, batch_size=%d, phase=%d",
                 config.training.epochs, config.training.batch_size, phase)
 
-    for epoch in range(1, config.training.epochs + 1):
+    for epoch in range(start_epoch, config.training.epochs + 1):
         t0 = time.time()
 
         train_loss = train_one_epoch(model, train_loader, criterion, optimizer, phase)

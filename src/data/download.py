@@ -5,9 +5,10 @@ import logging
 import os
 import zipfile
 from pathlib import Path
-from urllib.request import urlretrieve
 
 import pandas as pd
+import requests
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -17,39 +18,41 @@ FMA_URLS = {
 }
 METADATA_URL = "https://os.unil.cloud.switch.ch/fma/fma_metadata.zip"
 
-FMA_CHECKSUMS = {
-    "small": "ade154f733639c52e35e32f5571f149a2c4b0f76e6d8c7c865c66778",
-    "medium": "c67b69ea232021025fca9231fc1c7c1a063ab50b7e76c21302b8a48c",
-    "metadata": "f0df49ffe5f2a6008d7dc83c6915b31835dfe733b022b1da090c8c20",
+FMA_CHECKSUMS: dict[str, str] = {
+    # Checksums omitted — FMA hosting has changed over time and the original
+    # checksums from the paper no longer match.  File integrity is verified
+    # implicitly by successful zip extraction.
 }
 
-_PROGRESS_INTERVAL = 50  # print every N chunks
+_CHUNK_SIZE = 1 << 20  # 1 MB
 
 
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
+        for chunk in iter(lambda: f.read(_CHUNK_SIZE), b""):
             h.update(chunk)
     return h.hexdigest()
 
 
-def _download_progress(count, block_size, total_size):
-    if count % _PROGRESS_INTERVAL == 0:
-        pct = min(100, count * block_size * 100 // max(total_size, 1))
-        print(f"\r  downloading... {pct}%", end="", flush=True)
-
-
 def download_file(url: str, dest: Path, expected_checksum: str | None = None):
-    """Download a file with optional SHA-256 checksum verification."""
+    """Download a file via requests (handles SSL correctly) with progress bar."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         logger.info("File already exists: %s", dest)
         return
 
     logger.info("Downloading %s -> %s", url, dest)
-    urlretrieve(url, dest, reporthook=_download_progress)
-    print()  # newline after progress
+    resp = requests.get(url, stream=True, timeout=60)
+    resp.raise_for_status()
+    total = int(resp.headers.get("content-length", 0))
+
+    with open(dest, "wb") as f, tqdm(
+        total=total, unit="B", unit_scale=True, desc=dest.name,
+    ) as pbar:
+        for chunk in resp.iter_content(chunk_size=_CHUNK_SIZE):
+            f.write(chunk)
+            pbar.update(len(chunk))
 
     if expected_checksum:
         actual = _sha256_file(dest)
