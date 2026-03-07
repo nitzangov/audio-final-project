@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -17,13 +18,18 @@ from src.data.features import extract_mel, extract_cqt
 from src.models.deepsync import DeepSyncClassifier
 from src.training.metrics import measure_latency
 from src.utils.config import load_config
+from src.utils.naming import result_filename
 
 
 def benchmark_feature_extraction(config, n_runs: int = 50):
-    """Measure feature extraction latency on a synthetic waveform."""
+    """Measure feature extraction latency on a synthetic waveform.
+
+    Only benchmarks features used by the current phase.
+    """
     sr = config.data.sample_rate
     duration = config.data.duration_sec
     y = np.random.randn(int(sr * duration)).astype(np.float32)
+    phase = config.model.phase
 
     mel_params = {
         "sr": sr,
@@ -31,13 +37,8 @@ def benchmark_feature_extraction(config, n_runs: int = 50):
         "n_fft": config.features.mel.n_fft,
         "hop_length": config.features.mel.hop_length,
     }
-    cqt_params = {
-        "sr": sr,
-        "n_bins": config.features.cqt.n_bins,
-        "hop_length": config.features.cqt.hop_length,
-    }
 
-    # Warmup
+    # Warmup Mel
     for _ in range(5):
         extract_mel(y, **mel_params)
 
@@ -47,28 +48,37 @@ def benchmark_feature_extraction(config, n_runs: int = 50):
         extract_mel(y, **mel_params)
         mel_times.append((time.perf_counter() - t0) * 1000)
 
-    # Warmup CQT
-    for _ in range(3):
-        extract_cqt(y, **cqt_params)
-
-    cqt_times = []
-    for _ in range(n_runs):
-        t0 = time.perf_counter()
-        extract_cqt(y, **cqt_params)
-        cqt_times.append((time.perf_counter() - t0) * 1000)
-
-    return {
+    results = {
         "mel_extraction": {
             "mean_ms": float(np.mean(mel_times)),
             "p50_ms": float(np.percentile(mel_times, 50)),
             "p95_ms": float(np.percentile(mel_times, 95)),
         },
-        "cqt_extraction": {
+    }
+
+    if phase >= 2:
+        cqt_params = {
+            "sr": sr,
+            "n_bins": config.features.cqt.n_bins,
+            "hop_length": config.features.cqt.hop_length,
+        }
+
+        for _ in range(3):
+            extract_cqt(y, **cqt_params)
+
+        cqt_times = []
+        for _ in range(n_runs):
+            t0 = time.perf_counter()
+            extract_cqt(y, **cqt_params)
+            cqt_times.append((time.perf_counter() - t0) * 1000)
+
+        results["cqt_extraction"] = {
             "mean_ms": float(np.mean(cqt_times)),
             "p50_ms": float(np.percentile(cqt_times, 50)),
             "p95_ms": float(np.percentile(cqt_times, 95)),
-        },
-    }
+        }
+
+    return results
 
 
 def benchmark_model_forward(config, n_runs: int = 100):
@@ -142,13 +152,16 @@ def main():
     print(f"  Total:                    {total:.2f} ms")
 
     # Save results
+    phase = config.model.phase
+    bench_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     all_results = {
         "feature_extraction": feat_results,
         "model_forward": model_results,
         "total_pipeline_mean_ms": total,
-        "phase": config.model.phase,
+        "phase": phase,
     }
-    output_path = Path(config.checkpoint_dir) / "benchmark_results.json"
+    bench_name = result_filename("benchmark_results", "json", phase, bench_ts)
+    output_path = Path(config.checkpoint_dir) / bench_name
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(all_results, f, indent=2)

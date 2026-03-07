@@ -6,6 +6,8 @@ data:
   sample_rate: 22050
   duration_sec: 30
   splits_csv: configs/splits/small_split.csv
+  preload: true             # Load all features into RAM at startup (faster epochs)
+  num_workers: 2            # DataLoader workers (used only when preload is off)
 
 features:
   mel:
@@ -17,7 +19,7 @@ features:
     hop_length: 512
 
 model:
-  phase: 1               # 1=mel-only, 2=dual-stream, 3=+attention
+  phase: 2               # 1=mel-only, 2=dual-stream, 3=+attention
   num_classes: 8          # 8 for small, 16 for medium
   backbone_channels: [32, 64, 128]
   norm_type: group        # GroupNorm (stable at small batch sizes)

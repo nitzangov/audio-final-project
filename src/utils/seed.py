@@ -34,14 +34,19 @@ def save_run_metadata(
     config_path: str | Path,
     seed: int,
     output_dir: str | Path,
+    phase: int = 1,
+    timestamp: str | None = None,
     extra: dict | None = None,
 ):
     """Save reproducibility metadata for a training run."""
+    from src.utils.naming import result_filename
+
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     meta = {
         "seed": seed,
+        "phase": phase,
         "config_hash": _config_hash(config_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "python_version": sys.version,
@@ -52,7 +57,8 @@ def save_run_metadata(
     if extra:
         meta.update(extra)
 
-    out_path = output_dir / "run_metadata.json"
+    filename = result_filename("run_metadata", "json", phase, timestamp)
+    out_path = output_dir / filename
     with open(out_path, "w") as f:
         json.dump(meta, f, indent=2)
     return out_path

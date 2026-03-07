@@ -4,6 +4,7 @@ import json
 import logging
 import time
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
 from src.training.metrics import compute_metrics
+from src.utils.naming import result_filename
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +146,7 @@ def train(
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     phase = config.model.phase
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     class_weights = compute_class_weights(train_loader)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
@@ -216,6 +219,7 @@ def train(
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_epoch = epoch
+            ckpt_name = result_filename("best_model", "pt", phase, run_timestamp)
             torch.save({
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
@@ -223,8 +227,8 @@ def train(
                 "val_accuracy": val_acc,
                 "val_f1_macro": val_f1,
                 "config": config.to_dict(),
-            }, checkpoint_dir / "best_model.pt")
-            logger.info("  -> New best model saved (acc=%.4f)", val_acc)
+            }, checkpoint_dir / ckpt_name)
+            logger.info("  -> New best model saved: %s (acc=%.4f)", ckpt_name, val_acc)
 
         scheduler.step(val_loss)
 
@@ -234,10 +238,14 @@ def train(
 
     history["best_epoch"] = best_epoch
     history["best_val_accuracy"] = best_val_acc
+    history["run_timestamp"] = run_timestamp
+    history["phase"] = phase
 
-    # Save training history
-    with open(checkpoint_dir / "training_history.json", "w") as f:
-        serializable = {k: v for k, v in history.items()}
-        json.dump(serializable, f, indent=2)
+    history_name = result_filename("training_history", "json", phase, run_timestamp)
+    with open(checkpoint_dir / history_name, "w") as f:
+        json.dump(history, f, indent=2)
+
+    # Store the checkpoint filename so downstream scripts can find it
+    history["checkpoint_filename"] = result_filename("best_model", "pt", phase, run_timestamp)
 
     return history
