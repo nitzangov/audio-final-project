@@ -1,0 +1,21 @@
+{
+  "feature_extraction": {
+    "mel_extraction": {
+      "mean_ms": 16.415244236122817,
+      "p50_ms": 16.313895990606397,
+      "p95_ms": 17.500358627876267
+    },
+    "cqt_extraction": {
+      "mean_ms": 21.529759988188744,
+      "p50_ms": 21.552020451053977,
+      "p95_ms": 23.870016203727573
+    }
+  },
+  "model_forward": {
+    "model_forward_mean_ms": 27.56693508476019,
+    "model_forward_p50_ms": 27.34289603540674,
+    "model_forward_p95_ms": 31.913919077487662
+  },
+  "total_pipeline_mean_ms": 65.51193930907175,
+  "phase": 3
+}

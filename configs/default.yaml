@@ -19,7 +19,7 @@ features:
     hop_length: 512
 
 model:
-  phase: 2               # 1=mel-only, 2=dual-stream, 3=+attention
+  phase: 3               # 1=mel-only, 2=dual-stream, 3=+attention
   num_classes: 8          # 8 for small, 16 for medium
   backbone_channels: [32, 64, 128]
   norm_type: group        # GroupNorm (stable at small batch sizes)

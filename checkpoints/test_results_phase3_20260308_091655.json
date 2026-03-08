@@ -1,0 +1,10 @@
+{
+  "test_loss": 2.0806912279129026,
+  "accuracy": 0.125,
+  "top3_accuracy": 0.375,
+  "f1_macro": 0.027777777777777776,
+  "f1_weighted": 0.027777777777777776,
+  "model_forward_mean_ms": 35.968623261433095,
+  "model_forward_p50_ms": 35.35158355953172,
+  "model_forward_p95_ms": 37.602143111871555
+}
