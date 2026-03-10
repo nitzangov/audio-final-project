@@ -35,6 +35,7 @@ training:
   early_stop_patience: 10
   scheduler_patience: 5
   scheduler_factor: 0.5
+  warmup_epochs: 2            # Linear LR warmup (0 to disable)
   num_seeds: 3
 
 seed: 42

@@ -111,7 +111,13 @@ Each phase should demonstrate measurable improvement over the previous one befor
 **To move between phases:**
 
 1. **Phase 1 -> 2**: Run `python scripts/preprocess.py --extract-cqt`, then set `model.phase: 2` and `model.num_classes: 8` in the config.
-2. **Phase 2 -> 3**: Set `model.phase: 3` in the config. No additional preprocessing needed.
+2. **Phase 2 -> 3**: Set `model.phase: 3` in the config, then train with transfer learning from Phase 2:
+
+```bash
+python scripts/train.py --from-phase2 checkpoints/best_model_phase2_YYYYMMDD_HHMMSS.pt
+```
+
+This loads Phase 2's trained backbone and classifier weights into the Phase 3 model. The attention module starts fresh with a gated residual that begins as near-pure mean pooling, so the model starts at Phase 2 performance and gradually incorporates attention. A 2-epoch LR warmup (`training.warmup_epochs` in config) prevents the new attention weights from destabilizing pretrained features.
 
 ## Project Structure
 

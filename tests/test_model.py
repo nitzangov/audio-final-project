@@ -94,6 +94,34 @@ class TestPhase3:
         assert not torch.isnan(logits).any()
 
 
+class TestAttentionGradientHealth:
+    """Verify attention module gradients are healthy (not vanishing)."""
+
+    def test_attention_grads_nonzero(self, mel_input, cqt_input):
+        model = DeepSyncClassifier(num_classes=NUM_CLASSES, phase=3)
+        logits = model(mel_input, cqt_input)
+        loss = logits.sum()
+        loss.backward()
+
+        attn = model.attention
+        for name, param in attn.named_parameters():
+            if param.requires_grad:
+                assert param.grad is not None, f"Attention param {name} has no gradient"
+                grad_norm = param.grad.norm().item()
+                assert grad_norm > 1e-8, (
+                    f"Attention param {name} gradient is vanishing: {grad_norm:.2e}"
+                )
+
+    def test_gate_starts_near_zero(self):
+        from src.models.attention import TemporalAttention
+
+        attn = TemporalAttention(feature_dim=128)
+        gate_value = torch.sigmoid(attn.gate).item()
+        assert gate_value < 0.05, (
+            f"Gate should start near 0 for mean-pool init, got {gate_value:.4f}"
+        )
+
+
 class TestFromConfig:
     def test_from_config(self):
         class MockConfig:

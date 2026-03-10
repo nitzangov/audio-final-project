@@ -62,38 +62,41 @@ class FMADataset(Dataset):
     def __len__(self):
         return len(self.track_ids)
 
-    def _crop(self, spec: np.ndarray) -> np.ndarray:
+    def _get_spec(self, tid: int, feature: str) -> np.ndarray:
+        if feature == "mel" and tid in self._mel_cache:
+            return self._mel_cache[tid]
+        if feature == "cqt" and tid in self._cqt_cache:
+            return self._cqt_cache[tid]
+        path = self.cache_dir / feature / f"{tid}.npy"
+        return np.load(path)
+
+    def _compute_crop_start(self, n_frames: int) -> int:
+        """Return the temporal crop start index (shared across features)."""
+        if self.crop_frames is None or n_frames <= self.crop_frames:
+            return 0
+        if self.crop_mode == "random":
+            return int(np.random.randint(0, n_frames - self.crop_frames))
+        return (n_frames - self.crop_frames) // 2
+
+    def _apply_crop(self, spec: np.ndarray, start: int) -> torch.Tensor:
         if self.crop_frames is not None and spec.shape[1] > self.crop_frames:
-            if self.crop_mode == "random":
-                start = np.random.randint(0, spec.shape[1] - self.crop_frames)
-            else:
-                start = (spec.shape[1] - self.crop_frames) // 2
             spec = spec[:, start : start + self.crop_frames]
         elif self.crop_frames is not None and spec.shape[1] < self.crop_frames:
             pad_width = self.crop_frames - spec.shape[1]
             spec = np.pad(spec, ((0, 0), (0, pad_width)), mode="constant")
-        return spec
-
-    def _load_and_crop(self, tid: int, feature: str) -> torch.Tensor:
-        if feature == "mel" and tid in self._mel_cache:
-            spec = self._mel_cache[tid]
-        elif feature == "cqt" and tid in self._cqt_cache:
-            spec = self._cqt_cache[tid]
-        else:
-            path = self.cache_dir / feature / f"{tid}.npy"
-            spec = np.load(path)
-
-        spec = self._crop(spec)
         return torch.from_numpy(spec.copy()).unsqueeze(0)  # (1, n_freq, T)
 
     def __getitem__(self, idx):
         tid = self.track_ids[idx]
         label = self.labels[idx]
 
-        mel = self._load_and_crop(tid, "mel")
+        mel_spec = self._get_spec(tid, "mel")
+        start = self._compute_crop_start(mel_spec.shape[1])
+        mel = self._apply_crop(mel_spec, start)
 
         if self.phase >= 2:
-            cqt = self._load_and_crop(tid, "cqt")
+            cqt_spec = self._get_spec(tid, "cqt")
+            cqt = self._apply_crop(cqt_spec, start)
             return mel, cqt, label
 
         return mel, label

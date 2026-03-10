@@ -7,6 +7,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import torch
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data.dataset import get_dataloaders
@@ -16,6 +18,22 @@ from src.training.visualize import generate_training_plots
 from src.utils.config import load_config
 from src.utils.naming import result_filename
 from src.utils.seed import save_run_metadata, set_seed
+
+
+def _load_phase2_weights(model, checkpoint_path: str) -> int:
+    """Transfer backbone/classifier weights from a Phase 2 checkpoint into a
+    Phase 3 model.  Attention parameters (which don't exist in Phase 2) keep
+    their fresh initialization.  Returns the number of transferred keys."""
+    ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    phase2_state = ckpt["model_state_dict"]
+    phase3_state = model.state_dict()
+    transferred = 0
+    for key in phase2_state:
+        if key in phase3_state:
+            phase3_state[key] = phase2_state[key]
+            transferred += 1
+    model.load_state_dict(phase3_state)
+    return transferred
 
 
 def main():
@@ -28,6 +46,11 @@ def main():
     parser.add_argument(
         "--resume", type=str, default=None,
         help="Path to checkpoint to resume from (default: None)",
+    )
+    parser.add_argument(
+        "--from-phase2", type=str, default=None,
+        help="Path to a Phase 2 checkpoint.  Transfers backbone and classifier "
+             "weights into the Phase 3 model (attention starts fresh).",
     )
     args = parser.parse_args()
 
@@ -52,6 +75,10 @@ def main():
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model: phase={phase}, params={n_params:,}")
 
+    if args.from_phase2:
+        n = _load_phase2_weights(model, args.from_phase2)
+        print(f"Transferred {n} parameter tensors from Phase 2 checkpoint")
+
     resume_path = args.resume
     if resume_path:
         print(f"Resuming from: {resume_path}")
@@ -73,7 +100,6 @@ def main():
 
     start_epoch = 1
     if args.resume:
-        import torch
         ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
         start_epoch = ckpt["epoch"] + 1
 

@@ -11,7 +11,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import LinearLR, ReduceLROnPlateau, SequentialLR
 from torch.utils.data import DataLoader
 
 from src.training.metrics import compute_metrics
@@ -151,17 +151,29 @@ def train(
     class_weights = compute_class_weights(train_loader)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
+    warmup_epochs = getattr(config.training, "warmup_epochs", 0)
+
     optimizer = AdamW(
         model.parameters(),
         lr=config.training.lr,
         weight_decay=config.training.weight_decay,
     )
-    scheduler = ReduceLROnPlateau(
+
+    plateau_scheduler = ReduceLROnPlateau(
         optimizer,
         mode="min",
         patience=config.training.scheduler_patience,
         factor=config.training.scheduler_factor,
     )
+
+    if warmup_epochs > 0:
+        warmup_scheduler = LinearLR(
+            optimizer, start_factor=0.01, end_factor=1.0,
+            total_iters=warmup_epochs,
+        )
+        logger.info("LR warmup: %d epochs (%.1e → %.1e)",
+                     warmup_epochs, config.training.lr * 0.01, config.training.lr)
+
     early_stopping = EarlyStopping(patience=config.training.early_stop_patience)
 
     history = {
@@ -230,7 +242,10 @@ def train(
             }, checkpoint_dir / ckpt_name)
             logger.info("  -> New best model saved: %s (acc=%.4f)", ckpt_name, val_acc)
 
-        scheduler.step(val_loss)
+        if warmup_epochs > 0 and epoch <= warmup_epochs:
+            warmup_scheduler.step()
+        else:
+            plateau_scheduler.step(val_loss)
 
         if early_stopping.step(val_loss):
             logger.info("Early stopping at epoch %d", epoch)

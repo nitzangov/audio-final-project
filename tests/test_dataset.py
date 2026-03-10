@@ -99,3 +99,35 @@ class TestFMADatasetPhase2:
         _, cqt, _ = ds[0]
         assert cqt.shape[0] == 1
         assert cqt.shape[1] == N_CQT_BINS
+
+    def test_mel_cqt_crop_alignment(self, mock_cache):
+        """Mel and CQT must receive the same temporal crop for the same sample."""
+        cache_dir, tids, labels = mock_cache
+        crop = 80
+        ds = FMADataset(
+            tids, labels, cache_dir, crop_frames=crop, crop_mode="random", phase=2,
+        )
+        mel_dir = cache_dir / "mel"
+        cqt_dir = cache_dir / "cqt"
+        tid = tids[0]
+        mel_raw = np.load(mel_dir / f"{tid}.npy")
+        cqt_raw = np.load(cqt_dir / f"{tid}.npy")
+
+        np.random.seed(42)
+        mel1, cqt1, _ = ds[0]
+        np.random.seed(42)
+        mel2, cqt2, _ = ds[0]
+
+        assert torch.equal(mel1, mel2), "Same seed should produce same mel crop"
+        assert torch.equal(cqt1, cqt2), "Same seed should produce same cqt crop"
+
+        start = None
+        for s in range(mel_raw.shape[1] - crop + 1):
+            if np.allclose(mel_raw[:, s : s + crop], mel1.squeeze(0).numpy()):
+                start = s
+                break
+        assert start is not None, "Could not find mel crop offset in raw mel"
+        expected_cqt = cqt_raw[:, start : start + crop]
+        assert np.allclose(expected_cqt, cqt1.squeeze(0).numpy()), (
+            "CQT crop must use the same start offset as mel"
+        )
